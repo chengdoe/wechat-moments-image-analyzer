@@ -1,0 +1,7 @@
+{
+  "name": "wechat-moments-image-analyzer",
+  "private": true,
+  "scripts": {
+    "build": "npm run build --prefix frontend"
+  }
+}

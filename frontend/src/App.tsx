@@ -52,7 +52,7 @@ type LocalImage = {
 const MAX_SIZE_MB = 5;
 const MIN_COUNT = 5;
 const API_BASE =
-  (import.meta as any).env.VITE_API_BASE || 'http://localhost:3001';
+  (import.meta as any).env.VITE_API_BASE || (import.meta as any).env.PROD ? '' : 'http://localhost:3001';
 
 function App() {
   const [images, setImages] = useState<LocalImage[]>([]);
