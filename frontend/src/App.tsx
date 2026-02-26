@@ -80,9 +80,13 @@ const parseUnknownError = (errorLike: unknown): string | null => {
 
 function App() {
   const [images, setImages] = useState<LocalImage[]>([]);
+  const [showAllImages, setShowAllImages] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [rawText, setRawText] = useState<string | null>(null);
+  const PREVIEW_COLUMNS = 6;
+  const PREVIEW_ROWS = 3;
+  const MAX_PREVIEW_COUNT = PREVIEW_COLUMNS * PREVIEW_ROWS;
 
   const handleFiles = useCallback((files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -115,6 +119,7 @@ function App() {
     if (newImages.length === 0) return;
 
     setImages((prev) => [...prev, ...newImages]);
+    setShowAllImages(false);
     setResult(null);
     setRawText(null);
   }, []);
@@ -131,7 +136,13 @@ function App() {
   };
 
   const removeImage = (id: string) => {
-    setImages((prev) => prev.filter((img) => img.id !== id));
+    setImages((prev) => {
+      const next = prev.filter((img) => img.id !== id);
+      if (next.length <= MAX_PREVIEW_COUNT) {
+        setShowAllImages(false);
+      }
+      return next;
+    });
   };
 
   const compressToDataUrl = (file: File): Promise<string> => {
@@ -214,6 +225,11 @@ function App() {
     }
   };
 
+  const visibleImages = showAllImages
+    ? images
+    : images.slice(0, MAX_PREVIEW_COUNT);
+  const hasMoreThanThreeRows = images.length > MAX_PREVIEW_COUNT;
+
   return (
     <div className="app-root">
       <div className="app-shell">
@@ -248,23 +264,41 @@ function App() {
           </p>
 
           {images.length > 0 && (
-            <div className="preview-grid">
-              {images.map((img) => (
-                <div key={img.id} className="preview-item">
-                  <img src={img.url} alt={img.file.name} />
-                  <div className="preview-info">
-                    <span className="preview-name">{img.file.name}</span>
-                    <span className="preview-size">{img.sizeMB}MB</span>
+            <>
+              <div className="preview-grid">
+                {visibleImages.map((img) => (
+                  <div key={img.id} className="preview-item">
+                    <img src={img.url} alt={img.file.name} />
+                    <div className="preview-info">
+                      <span className="preview-name">{img.file.name}</span>
+                      <span className="preview-size">{img.sizeMB}MB</span>
+                    </div>
+                    <button
+                      className="preview-remove"
+                      onClick={() => removeImage(img.id)}
+                    >
+                      删除
+                    </button>
                   </div>
-                  <button
-                    className="preview-remove"
-                    onClick={() => removeImage(img.id)}
-                  >
-                    删除
-                  </button>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+              {hasMoreThanThreeRows && !showAllImages && (
+                <button
+                  className="preview-toggle-button"
+                  onClick={() => setShowAllImages(true)}
+                >
+                  查看所有图片
+                </button>
+              )}
+              {hasMoreThanThreeRows && showAllImages && (
+                <button
+                  className="preview-toggle-button"
+                  onClick={() => setShowAllImages(false)}
+                >
+                  收起图片
+                </button>
+              )}
+            </>
           )}
 
           <div className="hero-footer">
