@@ -52,9 +52,9 @@ module.exports = async (req, res) => {
   try {
     const { images } = req.body || {};
 
-    if (!Array.isArray(images) || images.length < 5) {
+    if (!Array.isArray(images) || images.length < 3) {
       return res.status(400).json({
-        error: '请至少上传5张图片进行分析',
+        error: '请至少上传3张图片进行分析',
       });
     }
 

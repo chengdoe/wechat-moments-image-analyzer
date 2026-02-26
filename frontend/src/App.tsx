@@ -66,7 +66,7 @@ type IconName =
   | 'raw';
 
 const MAX_SIZE_MB = 5;
-const MIN_COUNT = 5;
+const MIN_COUNT = 3;
 const MAX_ORIGINAL_SIZE_MB = 30;
 const TARGET_ANALYZE_SIZE_KB = 350;
 const API_BASE =
@@ -424,11 +424,22 @@ function App() {
         images: dataUrls,
       });
 
+      const scrollToReportAfterRender = () => {
+        // 结果区是条件渲染，等下一帧挂载后再滚动
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            scrollToElement(reportRef.current);
+          });
+        });
+      };
+
       if (resp.data?.data) {
         setResult(resp.data.data as AnalysisResult);
+        scrollToReportAfterRender();
       } else if (resp.data?.raw) {
         console.log('Ark raw result:', resp.data.raw);
         setRawText(String(resp.data.raw));
+        scrollToReportAfterRender();
         Toast.show({
           content: '已展示模型原始文本结果',
         });
@@ -660,7 +671,7 @@ function App() {
           </div>
 
           <p className="upload-hint">
-            请上传 5 张以上的朋友圈截图；支持大图，分析前会自动压缩到单张 {MAX_SIZE_MB}MB 以内。
+            请上传 {MIN_COUNT} 张以上的朋友圈截图；支持大图，分析前会自动压缩到单张 {MAX_SIZE_MB}MB 以内。
           </p>
 
           {images.length > 0 && (
@@ -713,7 +724,7 @@ function App() {
                 >
                   {loading ? (
                     <span className="loading-inline">
-                      <SpinLoading style={{ '--size': '24px' }} /> 正在为你生成结果，约 30 秒完成，请稍等
+                      <SpinLoading style={{ '--size': '24px' }} /> 正在为你生成结果，约 1 分钟完成，请稍等
                     </span>
                   ) : (
                     '重新分析'
@@ -740,7 +751,7 @@ function App() {
               >
                 {loading ? (
                   <span className="loading-inline">
-                    <SpinLoading style={{ '--size': '24px' }} /> 正在为你生成结果，约 30 秒完成，请稍等
+                    <SpinLoading style={{ '--size': '24px' }} /> 正在为你生成结果，约 1 分钟完成，请稍等
                   </span>
                 ) : (
                   '开始分析'
