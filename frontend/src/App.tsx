@@ -54,6 +54,30 @@ const MIN_COUNT = 5;
 const API_BASE =
   (import.meta as any).env.VITE_API_BASE || (import.meta as any).env.PROD ? '' : 'http://localhost:3001';
 
+const parseUnknownError = (errorLike: unknown): string | null => {
+  if (!errorLike) return null;
+  if (typeof errorLike === 'string') return errorLike;
+  if (typeof errorLike !== 'object') return String(errorLike);
+
+  const maybeObj = errorLike as Record<string, unknown>;
+  const directMessage =
+    (typeof maybeObj.message === 'string' && maybeObj.message) ||
+    (typeof maybeObj.error === 'string' && maybeObj.error) ||
+    (typeof maybeObj.detail === 'string' && maybeObj.detail);
+  if (directMessage) return directMessage;
+
+  if (maybeObj.error && typeof maybeObj.error === 'object') {
+    const nestedMessage = parseUnknownError(maybeObj.error);
+    if (nestedMessage) return nestedMessage;
+  }
+
+  try {
+    return JSON.stringify(errorLike);
+  } catch {
+    return null;
+  }
+};
+
 function App() {
   const [images, setImages] = useState<LocalImage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -175,10 +199,12 @@ function App() {
         });
       }
     } catch (e: any) {
-      const msg =
-        e?.response?.data?.error ||
-        e?.message ||
-        '分析失败，请稍后重试';
+      const msg = (
+        parseUnknownError(e?.response?.data?.error) ||
+        parseUnknownError(e?.response?.data) ||
+        parseUnknownError(e) ||
+        '分析失败，请稍后重试'
+      ).trim();
       if (typeof window !== 'undefined') {
         window.alert(msg);
       }
