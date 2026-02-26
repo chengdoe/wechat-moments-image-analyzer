@@ -1,7 +1,7 @@
 {
   "name": "backend",
-  "version": "1.0.0",
-  "description": "",
+  "version": "1.0.1",
+  "description": "Backend API for wechat moments analyzer",
   "main": "index.js",
   "scripts": {
     "dev": "nodemon index.js",

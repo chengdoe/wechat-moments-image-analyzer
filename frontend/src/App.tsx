@@ -51,6 +51,8 @@ type LocalImage = {
 
 const MAX_SIZE_MB = 5;
 const MIN_COUNT = 5;
+const MAX_ORIGINAL_SIZE_MB = 30;
+const TARGET_ANALYZE_SIZE_KB = 350;
 const API_BASE =
   (import.meta as any).env.VITE_API_BASE || (import.meta as any).env.PROD ? '' : 'http://localhost:3001';
 
@@ -102,9 +104,9 @@ function App() {
         return;
       }
       const sizeMB = file.size / 1024 / 1024;
-      if (sizeMB > MAX_SIZE_MB) {
+      if (sizeMB > MAX_ORIGINAL_SIZE_MB) {
         Toast.show({
-          content: `单张图片不能超过${MAX_SIZE_MB}MB`,
+          content: `单张原图不能超过${MAX_ORIGINAL_SIZE_MB}MB`,
         });
         return;
       }
@@ -117,6 +119,12 @@ function App() {
     });
 
     if (newImages.length === 0) return;
+
+    if (newImages.some((img) => img.sizeMB > MAX_SIZE_MB)) {
+      Toast.show({
+        content: `检测到大图，分析前会自动压缩到${MAX_SIZE_MB}MB以内`,
+      });
+    }
 
     setImages((prev) => [...prev, ...newImages]);
     setShowAllImages(false);
@@ -145,27 +153,67 @@ function App() {
     });
   };
 
-  const compressToDataUrl = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
+  const fileOrBlobToDataUrl = (file: File | Blob): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const estimateDataUrlBytes = (dataUrl: string): number => {
+    const base64 = dataUrl.split(',')[1] || '';
+    return Math.ceil((base64.length * 3) / 4);
+  };
+
+  const compressOnce = (
+    file: File | Blob,
+    options: { quality: number; maxWidth: number; maxHeight: number }
+  ): Promise<File | Blob> =>
+    new Promise((resolve, reject) => {
       // @ts-ignore
       new Compressor(file, {
-        quality: 0.6,
-        maxWidth: 800,
-        maxHeight: 800,
+        quality: options.quality,
+        maxWidth: options.maxWidth,
+        maxHeight: options.maxHeight,
         convertSize: 0,
         success(result: File | Blob) {
-          const reader = new FileReader();
-          reader.onload = () => {
-            resolve(reader.result as string);
-          };
-          reader.onerror = reject;
-          reader.readAsDataURL(result);
+          resolve(result);
         },
         error(err: Error) {
           reject(err);
         },
       });
     });
+
+  const compressToDataUrl = async (
+    file: File,
+    maxBytes: number
+  ): Promise<string> => {
+    let current: File | Blob = file;
+    let quality = 0.82;
+    let maxWidth = 1800;
+    let maxHeight = 1800;
+    let bestDataUrl = await fileOrBlobToDataUrl(file);
+    let bestBytes = estimateDataUrlBytes(bestDataUrl);
+
+    for (let i = 0; i < 8; i += 1) {
+      current = await compressOnce(current, { quality, maxWidth, maxHeight });
+      const dataUrl = await fileOrBlobToDataUrl(current);
+      const bytes = estimateDataUrlBytes(dataUrl);
+      if (bytes < bestBytes) {
+        bestBytes = bytes;
+        bestDataUrl = dataUrl;
+      }
+      if (bytes <= maxBytes) {
+        return dataUrl;
+      }
+      quality = Math.max(0.28, quality - 0.1);
+      maxWidth = Math.max(520, Math.round(maxWidth * 0.82));
+      maxHeight = Math.max(520, Math.round(maxHeight * 0.82));
+    }
+
+    return bestDataUrl;
   };
 
   const handleAnalyze = async () => {
@@ -184,9 +232,15 @@ function App() {
     try {
       // 为了控制请求体积，最多取前 8 张图进行分析
       const selected = images.slice(0, 8);
-      const dataUrls = await Promise.all(
-        selected.map((img) => compressToDataUrl(img.file))
+      const targetBytes = Math.min(
+        MAX_SIZE_MB * 1024 * 1024,
+        TARGET_ANALYZE_SIZE_KB * 1024
       );
+      const dataUrls: string[] = [];
+      for (const img of selected) {
+        const compressed = await compressToDataUrl(img.file, targetBytes);
+        dataUrls.push(compressed);
+      }
 
       // 前端不再单独设置超时时间，由后端/Ark 控制整体时长
       const resp = await axios.post(`${API_BASE}/api/analyze`, {
@@ -260,7 +314,7 @@ function App() {
           </div>
 
           <p className="upload-hint">
-            请上传 5 张以上的朋友圈截图，单张不超过 {MAX_SIZE_MB}MB。
+            请上传 5 张以上的朋友圈截图；支持大图，分析前会自动压缩到单张 {MAX_SIZE_MB}MB 以内。
           </p>
 
           {images.length > 0 && (
